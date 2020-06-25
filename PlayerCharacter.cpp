@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h" 
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "Editor/EditorEngine.h" 
 #include "Math/Rotator.h" 
 #include "GameFramework/Actor.h" 
 #include "GameFramework/CharacterMovementComponent.h" 
@@ -16,11 +17,16 @@
 APlayerCharacter::APlayerCharacter() :
 	bIsAttacking(false),
 	bIsJumping(false),
-	bIsDoubleJumping(false),
-	fJumpValue(420.f)
+	bIsDoubleJumping(false)
 {
 	PrimaryActorTick.bCanEverTick = true;
 	XYMovement.Init(0, 2);
+	RotationDirections.Init(0,0);
+	
+	for (int direction = 0; direction < 8; direction++)
+	{
+		RotationDirections.Add(-135.f + direction*45.f);
+	}
 }
 
 void APlayerCharacter::BeginPlay()
@@ -31,18 +37,24 @@ void APlayerCharacter::BeginPlay()
 	m_MoveC = GetCharacterMovement();
 	m_MeshC = (UStaticMeshComponent*)GetComponentByClass(UStaticMeshComponent::StaticClass());
 	m_MeshC->OnComponentBeginOverlap.AddDynamic(this, &APlayerCharacter::BeginOverlap);
+	MeshScale = m_MeshC->GetRelativeScale3D();
 	m_GameState = (AC_GS_CBTest*)UGameplayStatics::GetGameState(GetWorld());
 }
 
 void APlayerCharacter::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaTime); 
-	if (bIsJumping) 
+	Super::Tick(DeltaTime);
+	if (bIsJumping)
 	{
 		APlayerCharacter::CheckGrounded();
 	}
 
-	if (bIsAttacking && AttackCurve) 
+	APlayerCharacter::CheckTimelineAnimations(DeltaTime);
+}
+
+void APlayerCharacter::CheckTimelineAnimations(float DeltaTime)
+{
+	if (bIsAttacking && AttackCurve)
 	{
 		if (AttackTimeline.IsPlaying())
 		{
@@ -54,19 +66,35 @@ void APlayerCharacter::Tick(float DeltaTime)
 		}
 	}
 
+	if (StretchCurve)
+	{
+		StretchTimeline.TickTimeline(DeltaTime);
+	}
+
 
 	if (DoubleJumpCurve && DoubleJumpTimeline.IsPlaying())
 	{
 		DoubleJumpTimeline.TickTimeline(DeltaTime);
 	}
+
+	if (SquashCurve)
+	{
+		SquashTimeline.TickTimeline(DeltaTime);
+	}
 }
 
 void APlayerCharacter::CheckGrounded()
 {
-	if (GetVelocity().Z == 0.f) 
+	if (ACharacter::GetVelocity().Z == 0.f) 
 	{
 		bIsJumping = false;
 		bIsDoubleJumping = false;
+		m_MoveC->GravityScale = 1.0f;
+
+		if (SquashCurve)
+		{
+			APlayerCharacter::PlayTimelineOnce(&SquashTimeline, FName("CheckSquashTimeline"), SquashCurve);
+		}
 	}
 }
 
@@ -86,12 +114,12 @@ void APlayerCharacter::MoveY(float fValue)
 	if (fValue == -1.00f)
 	{
 		XYMovement[1] = -1;
-		SetYawValue();
+		APlayerCharacter::SetYawValue();
 	}
 	else if (fValue == 1.00f)
 	{
 		XYMovement[1] = 1;
-		SetYawValue();
+		APlayerCharacter::SetYawValue();
 	}
 	else
 	{
@@ -105,12 +133,12 @@ void APlayerCharacter::MoveX(float fValue)
 	if (fValue == -1.00f)
 	{
 		XYMovement[0] = -1;
-		SetYawValue();
+		APlayerCharacter::SetYawValue();
 	}
 	else if (fValue == 1.00f)
 	{
 		XYMovement[0] = 1;
-		SetYawValue();
+		APlayerCharacter::SetYawValue();
 	}
 	else
 	{
@@ -120,28 +148,29 @@ void APlayerCharacter::MoveX(float fValue)
 
 void APlayerCharacter::SetYawValue()
 {
-	//Placeholder Solution!
-	if (XYMovement[0] == -1 && XYMovement[1] == 0)
-		SetRotation(0.f);
-	else if (XYMovement[0] == -1 && XYMovement[1] == -1)
-		SetRotation(45.f);
+	//Workaround due to this->SetActorRotation() not working for whatever reason
+	if (XYMovement[0] == -1 && XYMovement[1] == -1)
+		APlayerCharacter::Rotate(RotationDirections[0]);
 	else if (XYMovement[0] == 0 && XYMovement[1] == -1)
-		SetRotation(90.f);
+		APlayerCharacter::Rotate(RotationDirections[1]);
 	else if (XYMovement[0] == 1 && XYMovement[1] == -1)
-		SetRotation(135.f);
+		APlayerCharacter::Rotate(RotationDirections[2]);
 	else if (XYMovement[0] == 1 && XYMovement[1] == 0)
-		SetRotation(180.f);
+		APlayerCharacter::Rotate(RotationDirections[3]);
 	else if (XYMovement[0] == 1 && XYMovement[1] == 1)
-		SetRotation(225.f);
+		APlayerCharacter::Rotate(RotationDirections[4]);
 	else if (XYMovement[0] == 0 && XYMovement[1] == 1)
-		SetRotation(270.f);
+		APlayerCharacter::Rotate(RotationDirections[5]);
 	else if (XYMovement[0] == -1 && XYMovement[1] == 1)
-		SetRotation(315.f);
+		APlayerCharacter::Rotate(RotationDirections[6]);
+	else if (XYMovement[0] == -1 && XYMovement[1] == 0)
+		APlayerCharacter::Rotate(RotationDirections[7]);
 }
 
-void APlayerCharacter::SetRotation(float Yaw)
+void APlayerCharacter::Rotate(float Goal)
 {
-	m_MeshC->SetRelativeRotation(FRotator(m_MeshC->GetRelativeRotation().Pitch, Yaw, m_MeshC->GetRelativeRotation().Roll));
+	m_MeshC->SetWorldRotation(FRotator(0, Goal, 0));
+	MeshRotation = m_MeshC->GetRelativeRotation();
 }
 
 
@@ -151,12 +180,7 @@ void APlayerCharacter::Attack()
 
 	if (AttackCurve)
 	{
-		FOnTimelineFloat AttackTimelineBind;
-		AttackTimelineBind.BindUFunction(this, FName("CheckAttackTimeline"));
-		AttackTimeline.AddInterpFloat(AttackCurve, AttackTimelineBind);
-		AttackTimeline.SetLooping(false);
-
-		AttackTimeline.PlayFromStart();
+		APlayerCharacter::PlayTimelineOnce(&AttackTimeline, FName("CheckAttackTimeline"), AttackCurve);
 	}
 }
 
@@ -164,8 +188,13 @@ void APlayerCharacter::Jump()
 {
 	if (!bIsJumping) 
 	{
-		LaunchCharacter(FVector(0, 0, fJumpValue), false, true);
+		ACharacter::LaunchCharacter(FVector(0, 0, fJumpValue), false, true);
 		bIsJumping = true;
+		m_MoveC->GravityScale += fAirGravity / 2.f;
+		if (StretchCurve)
+		{
+			APlayerCharacter::PlayTimelineOnce(&StretchTimeline, FName("CheckStretchTimeline"), StretchCurve);
+		}
 	}
 	else if (!bIsDoubleJumping)
 	{
@@ -175,29 +204,43 @@ void APlayerCharacter::Jump()
 
 void APlayerCharacter::DoubleJump()
 {
-	LaunchCharacter(FVector(0, 0, fJumpValue), false, true);
+	ACharacter::LaunchCharacter(FVector(0, 0, fJumpValue), false, true);
 	bIsDoubleJumping = true;
+	m_MoveC->GravityScale = fAirGravity;
 
 	if (DoubleJumpCurve)
 	{
-		currentMeshRotation = m_MeshC->GetRelativeRotation();
-		FOnTimelineFloat DoubleJumpTimelineBind;
-		DoubleJumpTimelineBind.BindUFunction(this, FName("CheckDoubleJumpTimeline"));
-		DoubleJumpTimeline.AddInterpFloat(DoubleJumpCurve, DoubleJumpTimelineBind);
-		DoubleJumpTimeline.SetLooping(false);
-
-		DoubleJumpTimeline.PlayFromStart();
+		APlayerCharacter::PlayTimelineOnce(&DoubleJumpTimeline, FName("CheckDoubleJumpTimeline"), DoubleJumpCurve);
 	}
 }
 
-void APlayerCharacter::CheckAttackTimeline(float deltaTime)
+void APlayerCharacter::PlayTimelineOnce(FTimeline* Timeline, FName Function, UCurveFloat* Curve)
 {
-	m_MeshC->SetRelativeRotation(FRotator(currentMeshRotation.Pitch, deltaTime, currentMeshRotation.Roll));
+	FOnTimelineFloat TimelineBind;
+	TimelineBind.BindUFunction(this, Function);
+	Timeline->AddInterpFloat(Curve, TimelineBind);
+	Timeline->SetLooping(false);
+	Timeline->PlayFromStart();
 }
 
-void APlayerCharacter::CheckDoubleJumpTimeline(float deltaTime)
+void APlayerCharacter::CheckAttackTimeline(float DeltaTime)
 {
-	m_MeshC->SetRelativeRotation(FRotator(deltaTime, currentMeshRotation.Yaw, currentMeshRotation.Roll));
+	m_MeshC->SetWorldRotation(FRotator(0, MeshRotation.Yaw+DeltaTime, 0));
+}
+
+void APlayerCharacter::CheckStretchTimeline(float DeltaTime)
+{
+	m_MeshC->SetWorldScale3D(FMath::Lerp(MeshScale, StretchScale, DeltaTime));
+}
+
+void APlayerCharacter::CheckDoubleJumpTimeline(float DeltaTime)
+{
+	m_MeshC->SetWorldRotation(FRotator(MeshRotation.Pitch+DeltaTime, MeshRotation.Yaw, 0));
+}
+
+void APlayerCharacter::CheckSquashTimeline(float DeltaTime)
+{
+	m_MeshC->SetWorldScale3D(FMath::Lerp(MeshScale, SquashScale, DeltaTime));
 }
 
 void APlayerCharacter::BeginOverlap(UPrimitiveComponent* OverlappedComponent,
@@ -214,12 +257,16 @@ void APlayerCharacter::BeginOverlap(UPrimitiveComponent* OverlappedComponent,
 		{
 			m_GameState->intPlayerScore++;
 		}
-		OtherActor->Destroy();
+
+		if (!((AC_Box*)OtherActor)->bDestroyTriggered) 
+		{
+			((AC_Box*)OtherActor)->OnDestroy();
+		}
 	}
 
 	if (strActorName.StartsWith(TEXT("BP_Death")))
 	{
 		m_GameState->bGameOver = true;
-		Destroy();
+		this->Destroy();
 	}
 }
