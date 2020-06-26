@@ -9,6 +9,7 @@
 class UCharacterMovementComponent;
 class UStaticMeshComponent;
 class UCurveFloat;
+class UCameraShake;
 class AC_GS_CBTest;
 
 
@@ -44,12 +45,15 @@ private:
 	void CheckGrounded();
 
 	void CheckTimelineAnimations(float DeltaTime);
-	void PlayTimelineOnce(FTimeline* Timeline, FName Function, UCurveFloat* Curve);
+	void PlayTimeline(FTimeline* Timeline, FName Function, UCurveFloat* Curve, bool bPlayOnce);
 
 	//Attack + Double Jump Animation
 	UFUNCTION()
-		void CheckAttackTimeline(float DeltaTime);
+		void CheckWalkTimeline(float DeltaTime);	
 	
+	UFUNCTION()
+		void CheckAttackTimeline(float DeltaTime);
+
 	UFUNCTION()
 		void CheckStretchTimeline(float DeltaTime);
 
@@ -59,19 +63,11 @@ private:
 	UFUNCTION()
 		void CheckSquashTimeline(float DeltaTime);
 
-private:
-	UCharacterMovementComponent* m_MoveC = nullptr;
-	UStaticMeshComponent* m_MeshC = nullptr;
-	AC_GS_CBTest* m_GameState = nullptr;
-	TArray<float> RotationDirections;
-	FRotator MeshRotation;
-	FVector MeshScale;
-
 public:
 	bool bIsAttacking;
 	bool bIsJumping;
 	bool bIsDoubleJumping;
-	TArray<int32> XYMovement;
+	FVector2D XYMovement;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Behaviour")
 		float fJumpValue;
@@ -88,13 +84,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Behaviour")
 		float fRememberedTime;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Behaviour")
-		FVector StretchScale;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Player Behaviour")
-		FVector SquashScale;
+	UPROPERTY(BlueprintReadOnly)
+		FVector CameraFocusPos;
 
 
+	FTimeline WalkTimeline;
+	UPROPERTY(EditAnywhere, Category = "Timeline")
+		UCurveFloat* WalkCurve;	
+
+	UPROPERTY(EditAnywhere, Category = "Timeline")
+		FVector WalkScale;
+	
 	FTimeline AttackTimeline;
 	UPROPERTY(EditAnywhere, Category = "Timeline")
 		UCurveFloat* AttackCurve;
@@ -103,6 +103,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Timeline")
 		UCurveFloat* StretchCurve;
 
+	UPROPERTY(EditAnywhere, Category = "Timeline")
+		FVector StretchScale;
+
 	FTimeline DoubleJumpTimeline;
 	UPROPERTY(EditAnywhere, Category = "Timeline")
 		UCurveFloat* DoubleJumpCurve;
@@ -110,4 +113,39 @@ public:
 	FTimeline SquashTimeline;
 	UPROPERTY(EditAnywhere, Category = "Timeline")
 		UCurveFloat* SquashCurve;
+
+	UPROPERTY(EditAnywhere, Category = "Timeline")
+		FVector SquashScale;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Camera Shake")
+		float fIntensity;
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake")
+		float fDuration;
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake|Oscillation")
+		FVector2D BlendInOut;
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake|Oscillation")
+		FVector2D PitchAmplitudeRange;		
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake|Oscillation")
+		FVector2D PitchFrequencyRange;	
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake|Oscillation")
+		FVector2D YawAmplitudeRange;	
+	
+	UPROPERTY(EditAnywhere, Category = "Camera Shake|Oscillation")
+		FVector2D YawFrequencyRange;
+
+private:
+	UCharacterMovementComponent* m_MoveC = nullptr;
+	UStaticMeshComponent* m_MeshC = nullptr;
+	AC_GS_CBTest* m_GameState = nullptr;
+	TArray<float> RotationDirections;
+	FRotator MeshRotation;
+	FVector MeshScale;
+
+	UPROPERTY(EditAnywhere, Category = "Camera Shake")
+		TSubclassOf<UCameraShake> CamShake;
 };

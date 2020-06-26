@@ -24,14 +24,16 @@ public:
 public:
 	bool bDestroyTriggered;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reward")
 		bool bReward;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FVector OriginalScale;;
 
 	FTimeline DestructionTimeline;
 	UPROPERTY(EditAnywhere, Category = "Destruction")
 		UCurveFloat* DestructionCurve;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Destruction")
+		FVector OriginalScale;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Destruction")
+		FVector DestroyScale;
 };

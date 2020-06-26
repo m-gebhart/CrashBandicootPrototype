@@ -9,7 +9,8 @@
 AC_Box::AC_Box() :
 	bDestroyTriggered(false)
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	SetActorTickEnabled(false);
 	OriginalScale = GetActorScale3D();
 }
 
@@ -31,15 +32,16 @@ void AC_Box::OnDestroy()
 		DestructionTimeline.AddInterpFloat(DestructionCurve, TimelineBind);
 		DestructionTimeline.SetLooping(false);
 		DestructionTimeline.PlayFromStart();
+		SetActorTickEnabled(true);
 	}
-	else if (!DestructionTimeline.IsPlaying())
+	else
 	{
-		Destroy();
+		this->Destroy();
 	}
 	bDestroyTriggered = true;
 }
 
 void AC_Box::CheckDestructionTimeline(float DeltaTime)
 {
-	this->SetActorScale3D(FMath::Lerp(OriginalScale, FVector(0.01f, 0.01f, 0.01f), DeltaTime));
+	((UStaticMeshComponent*)GetComponentByClass(UStaticMeshComponent::StaticClass()))->SetWorldScale3D(FMath::Lerp(OriginalScale, DestroyScale, DeltaTime));
 }
